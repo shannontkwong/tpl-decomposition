@@ -1,18 +1,3 @@
-"""
-Local Extinction Analysis
-=========================
-Shannon T. Wong (2026)
-
-Reproduces the main local extinction result (Table 1, Fig. 2):
-  - Species in above-median σ²_L go locally extinct at 20.1% vs 25.1%
-  - Mann-Whitney p = 0.0001, n = 3,125 species-study pairs, 706 extinctions
-  - Robust across three extinction definitions (Table 1)
-  - Jackknife-stable across all 20 largest contributing studies
-  - Mixed-effects logistic regression: β = -0.089, z = -3.21, p = 0.001
-
-Run AFTER 01_core_analysis.py (requires BioTIME data loaded).
-"""
-
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -24,11 +9,6 @@ from sklearn.model_selection import cross_val_score, StratifiedKFold
 import statsmodels.formula.api as smf
 import warnings
 warnings.filterwarnings('ignore')
-
-
-# =============================================================================
-# 1. Build extinction dataset
-# =============================================================================
 
 def build_extinction_dataset(bt, min_years=8, min_sites=3,
                               sigma2_L_floor=0.01):
@@ -135,11 +115,6 @@ def abundance_control(ext_df):
     print(f"  OLS slope log(σ²_L) ~ log(N̄): {slope:.3f}")
     return df, slope
 
-
-# =============================================================================
-# 3. Main result: Mann-Whitney test
-# =============================================================================
-
 def main_extinction_test(ext_df):
     """
     Compare local extinction rates between species below and above median
@@ -168,10 +143,6 @@ def main_extinction_test(ext_df):
     print(f"  Mann-Whitney p = {p:.4f}")
     return p
 
-
-# =============================================================================
-# 4. Robustness across extinction definitions (Table 1)
-# =============================================================================
 
 def robustness_extinction_definitions(bt, min_sites=3, sigma2_L_floor=0.01):
     """
@@ -245,11 +216,6 @@ def robustness_extinction_definitions(bt, min_sites=3, sigma2_L_floor=0.01):
         print(f"  {def_name:<35} {len(df):>8,} {df['went_extinct'].sum():>12,} "
               f"{p:>8.4f}")
 
-
-# =============================================================================
-# 5. Jackknife stability (Fig. 2b)
-# =============================================================================
-
 def jackknife_stability(ext_df):
     """
     Sequentially remove each of the 20 largest contributing studies.
@@ -286,11 +252,6 @@ def jackknife_stability(ext_df):
     print(f"  All p<0.05: {(p_values < 0.05).all()}")
     return p_values
 
-
-# =============================================================================
-# 6. Mixed-effects logistic regression (within-study clustering correction)
-# =============================================================================
-
 def mixed_effects_test(ext_df):
     """
     Mixed-effects logistic regression with study as random intercept.
@@ -311,11 +272,6 @@ def mixed_effects_test(ext_df):
         print("  (Result not explained by within-study clustering)")
     except Exception as e:
         print(f"  Model failed: {e}")
-
-
-# =============================================================================
-# 7. AUC by taxonomic realm (Fig. 2c)
-# =============================================================================
 
 def auc_by_realm(ext_df):
     """
@@ -349,10 +305,6 @@ def auc_by_realm(ext_df):
                   f"{ext_rate:>10.3f}")
 
 
-# =============================================================================
-# 8. Geographic robustness
-# =============================================================================
-
 def geographic_robustness(ext_df, bt):
     """
     Test result across major biogeographic regions using study latitude.
@@ -382,11 +334,6 @@ def geographic_robustness(ext_df, bt):
             high['went_extinct'].astype(int),
             alternative='two-sided')
         print(f"  {region}: n={len(sub):,}, p={p:.4f}")
-
-
-# =============================================================================
-# MAIN
-# =============================================================================
 
 if __name__ == '__main__':
     import sys
