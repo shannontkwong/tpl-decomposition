@@ -145,7 +145,6 @@ def batch_query_iucn(unique_species, token, cache_file, rate_limit=28):
 
     for i, sp in enumerate(tqdm(species_todo, desc='IUCN')):
         res = query_iucn(sp, token)
-
         if res['category'] == 'NE':
             accepted = query_iucn_synonym(sp, token)
             if accepted and accepted.lower() != sp.lower():
@@ -153,7 +152,6 @@ def batch_query_iucn(unique_species, token, cache_file, rate_limit=28):
                 if r2 and r2['category'] not in ('NE', None):
                     res = r2
                     res['synonym_of'] = sp
-
         cache[sp] = res
         if i % 100 == 0:
             save_cache(cache, cache_file)
@@ -165,26 +163,22 @@ def batch_query_iucn(unique_species, token, cache_file, rate_limit=28):
 
 
 def build_matched_dataset(per_species, cache):
-    iucn_df = pd.DataFrame([
+    iucn_df  = pd.DataFrame([
         {'species_name': sp, **res}
         for sp, res in cache.items() if res
     ])
-
     merged   = per_species.merge(iucn_df, on='species_name', how='inner')
     assessed = merged[merged['category'].isin(['LC', 'NT', 'VU', 'EN', 'CR'])].copy()
     assessed['threatened'] = assessed['category'].isin({'VU', 'EN', 'CR'}).astype(int)
 
     print(f"\n  Matched + assessed: {len(assessed):,}")
-    print(f"\n  Category breakdown:")
     print(assessed['category'].value_counts()
           .reindex(['LC', 'NT', 'VU', 'EN', 'CR']).to_string())
-
     return assessed
 
 
 def run_iucn_statistics(assessed):
     print("\n=== IUCN RESULTS ===")
-
     df    = assessed.copy()
     df    = df[(df['sigma_L2_mean'] > 0) & (df['mean_abund'] > 0)].copy()
     log_s = np.log(df['sigma_L2_mean'])
@@ -207,13 +201,6 @@ def run_iucn_statistics(assessed):
         _, p = stats.mannwhitneyu(sub, lc, alternative='two-sided')
         print(f"    {cat} vs LC: p={p:.4f}  (n={len(sub)})")
 
-    auc = roc_auc_score(df['threatened'], df['sigma2_L_resid'])
-    print(f"\n  AUC (σ²_L_resid → threatened): {auc:.3f}")
-
-    lm = smf.ols("threatened ~ sigma2_L_resid + mean_abund", data=df).fit()
-    print(f"\n  OLS controlling for abundance:")
-    print(lm.summary().tables[1])
-
     return df
 
 
@@ -233,23 +220,22 @@ if __name__ == '__main__':
 
     sigma_path = os.path.join(OUT_DIR, 'per_species_sigmaL2.csv')
     if os.path.exists(sigma_path):
-        print("Loading pre-computed per-species σ²_L...")
+        print("Loading pre-computed per-species sigma2_L...")
         per_species = pd.read_csv(sigma_path)
         print(f"  {len(per_species):,} species loaded")
     else:
-        print("Computing per-species σ²_L from BioTIME...")
+        print("Computing per-species sigma2_L from BioTIME...")
         import pyreadr
         result      = pyreadr.read_r(os.path.join(DATA_DIR, 'biotime_v2_full_2025.rds'))
         bt          = result[None] if None in result else list(result.values())[0]
         bt.columns  = bt.columns.str.upper()
         per_species, species_stats = compute_per_species_sigma2L(bt)
         per_species.to_csv(sigma_path, index=False)
-        species_stats.to_csv(os.path.join(OUT_DIR, 'species_study_stats.csv'), index=False)
+        species_stats.to_csv(
+            os.path.join(OUT_DIR, 'species_study_stats.csv'), index=False)
 
     unique_species = per_species['species_name'].tolist()
-    cache = batch_query_iucn(unique_species, IUCN_TOKEN, CACHE_FILE, RATE_LIMIT)
-
+    cache    = batch_query_iucn(unique_species, IUCN_TOKEN, CACHE_FILE, RATE_LIMIT)
     assessed = build_matched_dataset(per_species, cache)
     assessed.to_csv(os.path.join(OUT_DIR, 'biotime_iucn_matched.csv'), index=False)
-
     run_iucn_statistics(assessed)
