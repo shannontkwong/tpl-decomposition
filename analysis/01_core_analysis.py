@@ -1,42 +1,9 @@
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
 from scipy.optimize import nnls
 from scipy import stats
 import warnings
 warnings.filterwarnings('ignore')
-
-plt.rcParams.update({
-    'figure.dpi'       : 200,
-    'font.family'      : 'DejaVu Serif',
-    'font.size'        : 10,
-    'axes.spines.top'  : False,
-    'axes.spines.right': False,
-    'axes.labelsize'   : 11,
-    'axes.titlesize'   : 11,
-    'legend.fontsize'  : 8,
-    'xtick.labelsize'  : 9,
-    'ytick.labelsize'  : 9,
-})
-
-BLUE   = '#2D6A9F'
-ORANGE = '#E05C2A'
-GREEN  = '#2A9E5C'
-PURPLE = '#534AB7'
-PINK   = '#9E2A7A'
-TEAL   = '#1A8C8C'
-GRAY   = '#666666'
-RED    = '#B03A2E'
-
-REALM_COLORS = {
-    'Marine':      BLUE,
-    'Terrestrial': GREEN,
-    'Freshwater':  ORANGE,
-    'Unknown':     GRAY,
-}
-
-RNG = np.random.default_rng(seed=42)
 
 
 def fit_two_term_nnls(means, variances, min_pts=8, n_boot=500):
@@ -57,7 +24,7 @@ def fit_two_term_nnls(means, variances, min_pts=8, n_boot=500):
     ss_tot = np.sum((y - np.mean(y))**2)
     R2     = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
 
-    rng2  = np.random.default_rng(seed=99)
+    rng2 = np.random.default_rng(seed=99)
     c1_b, c2_b = [], []
     for _ in range(n_boot):
         idx = rng2.integers(0, len(M), len(M))
@@ -109,17 +76,6 @@ def compute_sigma2_SAD(snap_df, min_species=5, min_sites=3):
     return float(np.mean(sad_vals))
 
 
-def sigma2_L_debiased(abundances, c1_estimate):
-    ab = abundances[abundances > 0]
-    if len(ab) < 3:
-        return np.nan
-    log_var = np.var(np.log(ab), ddof=1)
-    Nbar    = np.mean(ab)
-    if not (np.isfinite(c1_estimate) and c1_estimate > 0 and Nbar > 0):
-        return log_var
-    return float(max(log_var - c1_estimate / Nbar**2, 1e-8))
-
-
 def crossover_scale(c1, sigma2_L):
     if sigma2_L > 0 and c1 > 0:
         return c1 / sigma2_L
@@ -162,11 +118,7 @@ def compute_study(study_df, meta_row, min_sites=10, min_species=12):
     sigma2_L, sigma2_L_cv = compute_sigma2_L(site_sp)
     sigma2_SAD             = compute_sigma2_SAD(snap)
 
-    c1_debias    = c1 if (np.isfinite(c1) and c1 > 0) else 1.0
-    M_bar_study  = float(np.mean(M_arr))
-    sigma2_L_deb = sigma2_L_debiased(
-        site_sp.groupby('SPECIES_ID')['ABUND'].mean().values,
-        c1_debias)
+    M_bar_study = float(np.mean(M_arr))
 
     ratio_c2_sigmaL = (c2 / sigma2_L
                        if (c2_valid and np.isfinite(sigma2_L) and sigma2_L > 0)
@@ -190,7 +142,6 @@ def compute_study(study_df, meta_row, min_sites=10, min_species=12):
         'R2_two_term'     : R2,
         'sigma2_L'        : sigma2_L,
         'sigma2_L_cv'     : sigma2_L_cv,
-        'sigma2_L_deb'    : sigma2_L_deb,
         'sigma2_SAD'      : sigma2_SAD,
         'ratio_c2_sigmaL' : ratio_c2_sigmaL,
         'ratio_SAD_sigmaL': ratio_SAD_sigmaL,
@@ -223,6 +174,8 @@ def run_all_studies(df_raw, meta, min_sites=10, min_species=12):
         r['REALM']    = meta_row.get('REALM', 'Unknown')
         r['CEN_LAT']  = meta_row.get('CEN_LATITUDE',
                         meta_row.get('CENT_LAT', np.nan))
+        r['CEN_LON']  = meta_row.get('CEN_LONGITUDE',
+                        meta_row.get('CENT_LONG', np.nan))
         records.append(r)
 
     results = pd.DataFrame(records)
@@ -231,7 +184,7 @@ def run_all_studies(df_raw, meta, min_sites=10, min_species=12):
 
 
 def validate_theorem2(results_df):
-    print("\n=== THEOREM 2 VALIDATION: c2 ≈ σ²_L ===")
+    print("\n=== THEOREM 2 VALIDATION: c2 ~ sigma2_L ===")
     valid = results_df[
         results_df['c2'].notna() &
         results_df['sigma2_L'].notna() &
@@ -239,10 +192,10 @@ def validate_theorem2(results_df):
         (results_df['sigma2_L'] > 0)
     ].copy()
 
-    print(f"  Studies with valid c2 and σ²_L: {len(valid)}")
-    for label, thresh in [('All studies',    0.0),
-                           ('>1 decade',      1.0),
-                           ('>1.5 decades',   1.5)]:
+    print(f"  Studies with valid c2 and sigma2_L: {len(valid)}")
+    for label, thresh in [('All studies',  0.0),
+                           ('>1 decade',    1.0),
+                           ('>1.5 decades', 1.5)]:
         sub = valid[valid['M_range_log'] >= thresh]
         if len(sub) < 5:
             continue
@@ -250,21 +203,21 @@ def validate_theorem2(results_df):
         sl, ic, _, _, se = stats.linregress(
             np.log(sub['sigma2_L']), np.log(sub['c2']))
         print(f"  {label}: n={len(sub)}, r={r:.3f}, p={p:.2e}, "
-              f"slope={sl:.3f}±{se:.3f}")
+              f"slope={sl:.3f}+/-{se:.3f}")
 
     return valid
 
 
 def validate_theorem4(results_df):
-    print("\n=== THEOREM 4 VALIDATION: σ²_L / σ²_SAD < 1 ===")
+    print("\n=== THEOREM 4 VALIDATION: sigma2_L / sigma2_SAD < 1 ===")
     sub = results_df[
         results_df['ratio_SAD_sigmaL'].notna() &
         np.isfinite(results_df['ratio_SAD_sigmaL']) &
         (results_df['ratio_SAD_sigmaL'] > 0)
     ].copy()
 
-    frac_lt1  = (sub['ratio_SAD_sigmaL'] < 1).mean()
-    median_r  = sub['ratio_SAD_sigmaL'].median()
+    frac_lt1 = (sub['ratio_SAD_sigmaL'] < 1).mean()
+    median_r = sub['ratio_SAD_sigmaL'].median()
 
     print(f"  Studies: {len(sub)}")
     print(f"  Fraction < 1:  {frac_lt1:.3f}")
@@ -319,63 +272,6 @@ def validate_c1_lifehistory(results_df):
     return sub
 
 
-def print_paper_stats(results_df):
-    print("\n" + "=" * 65)
-    print("KEY STATISTICS")
-    print("=" * 65)
-
-    valid = results_df[
-        results_df['c2'].notna() &
-        results_df['sigma2_L'].notna() &
-        (results_df['c2'] > 0) &
-        (results_df['sigma2_L'] > 0) &
-        (results_df['M_range_log'] >= 1.5)
-    ].copy()
-
-    if len(valid) >= 5:
-        r, p = stats.spearmanr(np.log(valid['sigma2_L']),
-                               np.log(valid['c2']))
-        sl, _, _, _, se = stats.linregress(
-            np.log(valid['sigma2_L']), np.log(valid['c2']))
-        print(f"\nTheorem 2 (>1.5 decades dynamic range):")
-        print(f"  n = {len(valid)}")
-        print(f"  Spearman r = {r:.3f}, p = {p:.2e}")
-        print(f"  log-log slope = {sl:.3f} ± {se:.3f}")
-
-    sad_sub = results_df[
-        results_df['ratio_SAD_sigmaL'].notna() &
-        np.isfinite(results_df['ratio_SAD_sigmaL']) &
-        (results_df['ratio_SAD_sigmaL'] > 0)
-    ]
-    if len(sad_sub) > 0:
-        print(f"\nTheorem 4 (SAD-TPL ratio):")
-        print(f"  n = {len(sad_sub)}")
-        print(f"  Fraction < 1: {(sad_sub['ratio_SAD_sigmaL'] < 1).mean():.3f}")
-        print(f"  Median: {sad_sub['ratio_SAD_sigmaL'].median():.3f}")
-
-    phase = results_df[
-        results_df['c1'].notna() &
-        results_df['sigma2_L'].notna() &
-        (results_df['c1'] > 0) &
-        (results_df['c1'] < 200) &
-        (results_df['sigma2_L'] > 0)
-    ].copy()
-
-    if len(phase) >= 10:
-        print(f"\nPhase diagram: {len(phase)} studies")
-        groups_s = [g['sigma2_L'].values for _, g in phase.groupby('REALM')
-                    if len(g) >= 5]
-        groups_c = [g['c1'].values for _, g in phase.groupby('REALM')
-                    if len(g) >= 5]
-        if groups_s:
-            H_s, p_s = stats.kruskal(*groups_s)
-            H_c, p_c = stats.kruskal(*groups_c)
-            print(f"  KW σ²_L across realms: H={H_s:.2f}, p={p_s:.4f}")
-            print(f"  KW c1 across realms:   H={H_c:.2f}, p={p_c:.4f}")
-
-    print("\n" + "=" * 65)
-
-
 def load_biotime(rds_path, meta_path):
     import pyreadr
     print("Loading BioTIME v2...")
@@ -411,7 +307,6 @@ def load_biotime(rds_path, meta_path):
 
 
 if __name__ == '__main__':
-    import sys
     import os
 
     DATA_DIR  = os.path.join(os.path.dirname(__file__), '..', 'data')
@@ -430,6 +325,5 @@ if __name__ == '__main__':
     validate_theorem2(results_df)
     validate_theorem4(results_df)
     validate_c1_lifehistory(results_df)
-    print_paper_stats(results_df)
 
-    print("\nDone. Run 02_local_extinction.py and 03_iucn_analysis.py next.")
+    print("\nDone. Run 02_local_extinction.py next.")
