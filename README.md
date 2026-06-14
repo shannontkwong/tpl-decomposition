@@ -108,7 +108,7 @@ All outputs are written to `outputs/`.
 
 ## Citation
 
-Wong ST (2026). A mechanistic decomposition of Taylor's Power Law reveals a scalable predictor of local population extinction risk. *PNAS* [in submission].
+Wong ST (2026). A mechanistic decomposition of Taylor's Power Law reveals a scalable predictor of local population extinction risk.
 
 ---
 
