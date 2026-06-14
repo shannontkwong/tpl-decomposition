@@ -4,7 +4,6 @@
 
 Code repository for:  
 *"A Mechanistic Decomposition of Taylor's Power Law Reveals a Scalable Predictor of Local Population Extinction Risk"*  
-PNAS [manuscript in submission]
 
 ---
 
